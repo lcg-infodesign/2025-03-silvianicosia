@@ -3,7 +3,10 @@ let data;
 let minLat, minLon, maxLat, maxLon;
 let hoveredVolcano = null;
 let margin = 60;
-let topMargin = 100; // margine ridotto
+let topMargin = 100;
+
+let filterSelect;
+let currentFilter = "Tutti";
 
 function preload() {
   data = loadTable("assets/data.csv", "csv", "header");
@@ -20,16 +23,41 @@ function setup() {
   maxLat = max(allLat);
   minLon = min(allLon);
   maxLon = max(allLon);
+  
+  // Dropdown menu
+  let offset = 40;
+  let dropdownX = margin + offset; 
+  let dropdownY = topMargin + 50;
+  
+  filterSelect = createSelect();
+  filterSelect.position(dropdownX, dropdownY);
+  filterSelect.option("Tutti");
+
+  let countries = [...new Set(data.getColumn("Country"))];
+  countries.sort();
+  countries.forEach(c => filterSelect.option(c));
+  filterSelect.changed(() => currentFilter = filterSelect.value());
+  
+  // Stili estetici
+  filterSelect.style('padding', '6px 10px');
+  filterSelect.style('font-size', '15px');
+  filterSelect.style('border', 'none');
+  filterSelect.style('border-radius', '6px');
+  filterSelect.style('background-color', '#1b1f3b');
+  filterSelect.style('color', 'white');
+  filterSelect.style('box-shadow', '0 0 8px rgba(0,0,0,0.4)');
+  filterSelect.style('z-index', '100');
 }
 
 function draw() {
-  background(10);
+  // sfondo con gradiente
+  setGradient(0, 0, width, height, color(10, 15, 35), color(5, 10, 25));
 
-  // disegna cornice
+  // Cornice elegante
   noFill();
-  stroke(255, 255, 255, 100);
+  stroke(255, 255, 255, 60);
   strokeWeight(2);
-  rect(margin, topMargin, width - margin * 2, height - topMargin - margin);
+  rect(margin, topMargin, width - margin * 2, height - topMargin - margin, 12);
 
   drawTitle();
   drawLegend();
@@ -43,6 +71,8 @@ function draw() {
     let volcanoName = data.getString(row, "Volcano Name");
     let elevation = data.getString(row, "Elevation (m)");
     let lastEruption = data.getString(row, "Last Known Eruption");
+    
+    if (currentFilter !== "Tutti" && country !== currentFilter) continue;
 
     let x = map(lon, minLon, maxLon, margin + 20, width - margin - 20);
     let y = map(lat, minLat, maxLat, height - margin - 20, topMargin + 20);
@@ -52,76 +82,73 @@ function draw() {
     let isHovered = d < radius;
 
     let isEurope = checkIfEurope(country);
-    let baseColor = isEurope ? color(255, 60, 60) : color(255, 150, 40);
+    let baseColor = isEurope ? color(255, 100, 120) : color(255, 180, 60);
 
-    // effetto glow - cerchi concentrici sfumati
+    // alone esterno morbido (triangolo più grande trasparente)
     noStroke();
-    for (let i = 3; i > 0; i--) {
-      let alpha = 40 / i;
-      fill(red(baseColor), green(baseColor), blue(baseColor), alpha);
-      ellipse(x, y, radius * 2 * (1 + i * 0.3));
-    }
+    fill(red(baseColor), green(baseColor), blue(baseColor), 80);
+    drawTriangle(x, y, radius * 3.5);
 
-    // puntino principale
+    // triangolo principale con bordo
+    stroke(255, 255, 255, 200);
+    strokeWeight(1.5);
     fill(baseColor);
-    ellipse(x, y, radius * 2);
+    drawTriangle(x, y, radius * 2.5);
 
+    // effetto glow se hover
     if (isHovered) {
-      hoveredVolcano = {
-        country: country,
-        volcanoName: volcanoName,
-        elevation: elevation,
-        lastEruption: lastEruption
-      };
+      fill(255, 255, 255, 200);
+      drawTriangle(x, y, radius * 1);
+      hoveredVolcano = { country, volcanoName, elevation, lastEruption };
     }
   }
 
-  if (hoveredVolcano) {
-    drawTooltip(hoveredVolcano);
-  }
+  if (hoveredVolcano) drawTooltip(hoveredVolcano);
+}
+
+// Funzione per disegnare triangolo centrato
+function drawTriangle(x, y, size) {
+  triangle(
+    x, y - size / 2,
+    x - size / 2, y + size / 2,
+    x + size / 2, y + size / 2
+  );
 }
 
 function drawTooltip(volcano) {
-  let tooltipText = 
-    volcano.country + "\n" +
-    "- " + volcano.volcanoName + "\n" +
-    "- Elevation: " + volcano.elevation + " m\n" +
-    "- Last eruption: " + volcano.lastEruption;
+  let lines = [
+    { label: "Paese:", value: volcano.country },
+    { label: "Nome:", value: volcano.volcanoName },
+    { label: "Altitudine:", value: volcano.elevation + " m" },
+    { label: "Ultima eruzione:", value: volcano.lastEruption }
+  ];
   
-  let padding = 8;
-  let lineHeight = 16;
-  let lines = tooltipText.split('\n');
-  let maxWidth = 0;
+  let padding = 10;
+  let lineHeight = 18;
+  textSize(13);
   
-  textSize(12);
-  for (let line of lines) {
-    maxWidth = max(maxWidth, textWidth(line));
-  }
-  
-  let boxWidth = maxWidth + padding * 2;
+  let boxWidth = 270;
   let boxHeight = lines.length * lineHeight + padding * 2;
+  let tooltipX = mouseX + 15;
+  let tooltipY = mouseY - 10;
   
-  // calcola posizione tooltip per non uscire dai bordi
-  let tooltipX = mouseX + 10;
-  let tooltipY = mouseY - padding;
+  if (tooltipX + boxWidth > width - 10) tooltipX = mouseX - boxWidth - 10;
+  if (tooltipY + boxHeight > height - 10) tooltipY = height - boxHeight - 10;
   
-  if (tooltipX + boxWidth > width - 10) {
-    tooltipX = mouseX - boxWidth - 10;
-  }
-  if (tooltipY + boxHeight > height - 10) {
-    tooltipY = height - boxHeight - 10;
-  }
-  
-  fill(0, 0, 0, 200);
-  stroke(255, 255, 255, 150);
+  fill(0, 0, 0, 220);
+  stroke(255, 255, 255, 100);
   strokeWeight(1);
-  rect(tooltipX, tooltipY, boxWidth, boxHeight, 4);
+  rect(tooltipX, tooltipY, boxWidth, boxHeight, 6);
   
-  fill(255);
   noStroke();
   textAlign(LEFT);
-  textSize(12);
-  text(tooltipText, tooltipX + padding, tooltipY + lineHeight);
+  for (let i = 0; i < lines.length; i++) {
+    let yPos = tooltipY + lineHeight * (i + 1);
+    fill(180, 200, 255);
+    text(lines[i].label, tooltipX + padding, yPos);
+    fill(255);
+    text(lines[i].value, tooltipX + 130, yPos);
+  }
 }
 
 function checkIfEurope(country) {
@@ -136,36 +163,57 @@ function checkIfEurope(country) {
 }
 
 function drawTitle() {
-  fill(255);
-  noStroke();
   textAlign(CENTER);
-  
-  // Titolo sopra la cornice
-  textSize(32);
   textStyle(BOLD);
-  text("MAPPA MONDIALE DEI VULCANI", width / 2, 40);
   
-  // Sottotitolo sotto il titolo, sopra la cornice
-  textSize(14);
+  textSize(34);
+  fill(255, 160, 90, 60);
+  text("MAPPA MONDIALE DEI VULCANI ", width / 2 + 2, 52);
+  fill(255, 220, 150);
+  text(" MAPPA MONDIALE DEI VULCANI ", width / 2, 50);
+
+  textSize(15);
   textStyle(NORMAL);
-  fill(255, 255, 255, 180);
-  text("Distribuzione geografica e informazioni sui principali vulcani del mondo", width / 2, 70);
+  fill(230);
+  text("Distribuzione geografica e informazioni sui principali vulcani del mondo", width / 2, 75);
 }
 
 function drawLegend() {
-  fill(255);
-  noStroke();
-  textSize(14);
   textAlign(LEFT);
-  text("LEGENDA:", margin + 20, height - margin - 60);
-
-  fill(255, 60, 60);
-  ellipse(margin + 30, height - margin - 40, 12);
+  textSize(15);
   fill(255);
-  text("Vulcani europei", margin + 50, height - margin - 36);
+  text("LEGENDA:", margin + 20, height - margin - 70);
 
-  fill(255, 150, 40);
-  ellipse(margin + 30, height - margin - 20, 12);
-  fill(255);
-  text("Vulcani non europei", margin + 50, height - margin - 16);
+  let size = 12;
+
+  // europeo
+  fill(255, 100, 120);
+  drawTriangle(margin + 35, height - margin - 50, size);
+  fill(230);
+  text("Vulcani europei", margin + 55, height - margin - 46);
+
+  // non europeo
+  fill(255, 180, 60);
+  drawTriangle(margin + 35, height - margin - 30, size);
+  fill(230);
+  text("Vulcani non europei", margin + 55, height - margin - 26);
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+  let offset = 40;
+  let dropdownX = margin + offset; 
+  let dropdownY = topMargin + 50;
+  if (filterSelect) filterSelect.position(dropdownX, dropdownY);
+}
+
+// Funzione per sfondo con gradiente
+function setGradient(x, y, w, h, c1, c2) {
+  noFill();
+  for (let i = y; i <= y + h; i++) {
+    let inter = map(i, y, y + h, 0, 1);
+    let c = lerpColor(c1, c2, inter);
+    stroke(c);
+    line(x, i, x + w, i);
+  }
 }
